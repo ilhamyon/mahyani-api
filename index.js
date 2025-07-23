@@ -3,11 +3,16 @@ const cors = require("cors");
 const app = express();
 const pendataanRoutes = require("./routes/pendataan");
 
-app.use(cors({
-  origin: "https://mahyani.amayor.id", // frontend URL
-  methods: ["GET", "POST", "PUT", "DELETE"],
-  credentials: true
-}));
+// app.use(cors({
+//   origin: [
+//     "http://localhost:5173",         // frontend lokal
+//     "https://mahyani.amayor.id"      // frontend production (jika ada)
+//   ],
+//   methods: ["GET", "POST", "PUT", "DELETE"],
+//   credentials: true
+// }));
+
+app.use(cors()); // Mengizinkan semua origin (jangan dipakai di production)
 
 app.use(express.json());
 app.use("/api/pendataan", pendataanRoutes);
