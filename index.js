@@ -2,6 +2,7 @@ const express = require("express");
 const cors = require("cors");
 const app = express();
 const pendataanRoutes = require("./routes/pendataan");
+const zkupRoutes = require("./routes/zkup");
 
 // app.use(cors({
 //   origin: [
@@ -16,6 +17,7 @@ app.use(cors()); // Mengizinkan semua origin (jangan dipakai di production)
 
 app.use(express.json());
 app.use("/api/pendataan", pendataanRoutes);
+app.use("/api/zkup", zkupRoutes);
 
 const PORT = 3000;
 app.listen(PORT, () => {
