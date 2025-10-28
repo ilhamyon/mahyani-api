@@ -23,13 +23,13 @@ router.post("/login", async (req, res) => {
     const user = users && users[0];
 
     if (!user) {
-      return res.status(401).json({ message: "Email tidak ditemukan" });
+      return res.status(400).json({ message: "Email tidak ditemukan" });
     }
 
     // Cek password
     const valid = await bcrypt.compare(password, user.password);
     if (!valid) {
-      return res.status(401).json({ message: "Password salah" });
+      return res.status(400).json({ message: "Password salah" });
     }
 
     // Generate token JWT
@@ -75,6 +75,11 @@ const authenticate = (req, res, next) => {
     next();
   });
 };
+
+router.post("/logout", authenticate, (req, res) => {
+  // Bisa sekadar validasi token dan kirim respon
+  res.json({ message: "Logout berhasil", isSuccess: true });
+});
 
 // Ekspor router dan middleware
 module.exports = { router, authenticate };
