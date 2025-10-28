@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const db = require("../db");
 
-// Promise wrapper untuk query MySQL
+// Helper: Promise wrapper
 const query = (sql, values = []) =>
   new Promise((resolve, reject) => {
     db.query(sql, values, (err, results) => {
@@ -11,84 +11,87 @@ const query = (sql, values = []) =>
     });
   });
 
-// Fungsi generate ID unik 4-digit
+// Generate ID unik
 const generateId = async () => {
   const newId = Math.floor(1000 + Math.random() * 9000).toString();
   const result = await query("SELECT id FROM pendataan WHERE id = ?", [newId]);
   return result.length ? generateId() : newId;
 };
 
-// GET semua data
+// ✅ GET semua data (filtered by role)
 router.get("/", async (req, res) => {
   try {
-    const results = await query("SELECT * FROM pendataan");
-    res.status(200).json({ data: results, errorMessage: null, isSuccess: true });
-  } catch (err) {
-    res.status(500).json({ data: null, errorMessage: err.message, isSuccess: false });
-  }
-});
+    let sql = "SELECT * FROM pendataan";
+    let values = [];
 
-// GET data by ID
-router.get("/:id", async (req, res) => {
-  try {
-    const result = await query("SELECT * FROM pendataan WHERE id = ?", [req.params.id]);
-    if (result.length === 0) {
-      return res.status(404).json({ data: null, errorMessage: "Data tidak ditemukan", isSuccess: false });
+    if (req.user.role !== "admin") {
+      sql += " WHERE pengusul = ?";
+      values.push(req.user.pengusul);
     }
-    res.status(200).json({ data: result[0], errorMessage: null, isSuccess: true });
+
+    const results = await query(sql, values);
+    res.status(200).json({ data: results, isSuccess: true });
   } catch (err) {
-    res.status(500).json({ data: null, errorMessage: err.message, isSuccess: false });
+    res.status(500).json({ errorMessage: err.message, isSuccess: false });
   }
 });
 
-// POST tambah data baru
+// ✅ POST tambah data
 router.post("/", async (req, res) => {
   try {
     const data = req.body;
     if (!data || Object.keys(data).length === 0) {
-      return res.status(400).json({ data: null, errorMessage: "Payload kosong", isSuccess: false });
+      return res.status(400).json({ errorMessage: "Payload kosong", isSuccess: false });
     }
 
     const newId = await generateId();
-    const payload = { id: newId, ...data };
+    const payload = {
+      id: newId,
+      ...data,
+      pengusul: req.user.pengusul,
+      status: "Menunggu Verifikasi",
+    };
 
     await query("INSERT INTO pendataan SET ?", payload);
-    res.status(201).json({ data: payload, errorMessage: null, isSuccess: true });
+    res.status(201).json({ data: payload, isSuccess: true });
   } catch (err) {
-    res.status(500).json({ data: null, errorMessage: err.message, isSuccess: false });
+    res.status(500).json({ errorMessage: err.message, isSuccess: false });
   }
 });
 
-// PUT update data
+// ✅ PUT update data
 router.put("/:id", async (req, res) => {
   try {
     const data = req.body;
     const result = await query("SELECT * FROM pendataan WHERE id = ?", [req.params.id]);
 
-    if (result.length === 0) {
-      return res.status(404).json({ data: null, errorMessage: "Data tidak ditemukan", isSuccess: false });
+    if (result.length === 0) return res.status(404).json({ errorMessage: "Data tidak ditemukan" });
+
+    if (req.user.role !== "admin" && result[0].pengusul !== req.user.pengusul) {
+      return res.status(403).json({ errorMessage: "Akses ditolak" });
     }
 
     await query("UPDATE pendataan SET ? WHERE id = ?", [data, req.params.id]);
-    res.status(200).json({ data: { id: req.params.id, ...data }, errorMessage: null, isSuccess: true });
+    res.json({ data: { id: req.params.id, ...data }, isSuccess: true });
   } catch (err) {
-    res.status(500).json({ data: null, errorMessage: err.message, isSuccess: false });
+    res.status(500).json({ errorMessage: err.message, isSuccess: false });
   }
 });
 
-// DELETE hapus data
+// ✅ DELETE
 router.delete("/:id", async (req, res) => {
   try {
     const result = await query("SELECT * FROM pendataan WHERE id = ?", [req.params.id]);
+    if (result.length === 0) return res.status(404).json({ errorMessage: "Data tidak ditemukan" });
 
-    if (result.length === 0) {
-      return res.status(404).json({ data: null, errorMessage: "Data tidak ditemukan", isSuccess: false });
+    if (req.user.role !== "admin" && result[0].pengusul !== req.user.pengusul) {
+      return res.status(403).json({ errorMessage: "Akses ditolak" });
     }
 
     await query("DELETE FROM pendataan WHERE id = ?", [req.params.id]);
-    res.status(200).json({ data: null, errorMessage: null, isSuccess: true });
+    res.json({ isSuccess: true });
   } catch (err) {
-    res.status(500).json({ data: null, errorMessage: err.message, isSuccess: false });
+    res.status(500).json({ errorMessage: err.message, isSuccess: false });
   }
 });
 
