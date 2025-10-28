@@ -1,10 +1,9 @@
-import express from "express";
-import db from "../db.js";
-import { authenticate } from "./auth.js";
-
+const express = require("express");
+const db = require("../db.js");
+const { authenticate } = require("./auth.js");
 const router = express.Router();
 
-// Fungsi helper query
+// Helper untuk query async
 const query = (sql, values = []) =>
   new Promise((resolve, reject) => {
     db.query(sql, values, (err, results) => {
@@ -15,7 +14,7 @@ const query = (sql, values = []) =>
 
 /**
  * 📋 GET /api/laporan/pendataan
- * Laporan lengkap pendataan (bisa difilter)
+ * Laporan lengkap dari tabel pendataan (dapat difilter)
  */
 router.get("/pendataan", authenticate, async (req, res) => {
   try {
@@ -23,7 +22,7 @@ router.get("/pendataan", authenticate, async (req, res) => {
     const filters = [];
     const values = [];
 
-    // Role-based filter (operator hanya lihat data pengusul-nya)
+    // 🔒 Role-based filtering
     if (req.user.role !== "admin") {
       filters.push("pengusul = ?");
       values.push(req.user.pengusul);
@@ -47,24 +46,30 @@ router.get("/pendataan", authenticate, async (req, res) => {
     const whereClause = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
 
     const results = await query(
-      `SELECT id, nama, nik, telepon, desa, kecamatan, kabupaten, pengusul, tahun_realisasi, status 
-       FROM pendataan ${whereClause} ORDER BY tahun_realisasi DESC`,
+      `
+      SELECT id, nama, nik, telepon, desa, kecamatan, kabupaten, pengusul, tahun_realisasi, status
+      FROM pendataan
+      ${whereClause}
+      ORDER BY tahun_realisasi DESC, kabupaten ASC
+      `,
       values
     );
 
     res.json({
-      data: results,
+      source: "pendataan",
       total: results.length,
+      data: results,
       isSuccess: true,
     });
   } catch (err) {
+    console.error("Error /laporan/pendataan:", err);
     res.status(500).json({ message: err.message, isSuccess: false });
   }
 });
 
 /**
  * 📋 GET /api/laporan/zkup
- * Laporan lengkap ZKUP (bisa difilter)
+ * Laporan lengkap dari tabel ZKUP (dapat difilter)
  */
 router.get("/zkup", authenticate, async (req, res) => {
   try {
@@ -95,17 +100,23 @@ router.get("/zkup", authenticate, async (req, res) => {
     const whereClause = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
 
     const results = await query(
-      `SELECT id, nama, nik, telepon, desa, kecamatan, kabupaten, pengusul, periode, status 
-       FROM zkup ${whereClause} ORDER BY periode DESC`,
+      `
+      SELECT id, nama, nik, telepon, desa, kecamatan, kabupaten, pengusul, periode, status
+      FROM zkup
+      ${whereClause}
+      ORDER BY periode DESC, kabupaten ASC
+      `,
       values
     );
 
     res.json({
-      data: results,
+      source: "zkup",
       total: results.length,
+      data: results,
       isSuccess: true,
     });
   } catch (err) {
+    console.error("Error /laporan/zkup:", err);
     res.status(500).json({ message: err.message, isSuccess: false });
   }
 });
@@ -116,36 +127,58 @@ router.get("/zkup", authenticate, async (req, res) => {
  */
 router.get("/combined", authenticate, async (req, res) => {
   try {
-    let whereClausePendataan = "";
-    let whereClauseZkup = "";
-    const values = [];
+    const filtersPendataan = [];
+    const filtersZkup = [];
+    const valuesPendataan = [];
+    const valuesZkup = [];
 
+    // Filter by role
     if (req.user.role !== "admin") {
-      whereClausePendataan = "WHERE pengusul = ?";
-      whereClauseZkup = "WHERE pengusul = ?";
-      values.push(req.user.pengusul);
+      filtersPendataan.push("pengusul = ?");
+      filtersZkup.push("pengusul = ?");
+      valuesPendataan.push(req.user.pengusul);
+      valuesZkup.push(req.user.pengusul);
     }
 
-    const pendataan = await query(
-      `SELECT 'Pendataan' AS sumber, id, nama, nik, telepon, desa, kecamatan, kabupaten, pengusul, tahun_realisasi AS periode, status 
-       FROM pendataan ${whereClausePendataan}`,
-      values
-    );
+    const wherePendataan = filtersPendataan.length ? `WHERE ${filtersPendataan.join(" AND ")}` : "";
+    const whereZkup = filtersZkup.length ? `WHERE ${filtersZkup.join(" AND ")}` : "";
 
-    const zkup = await query(
-      `SELECT 'ZKUP' AS sumber, id, nama, nik, telepon, desa, kecamatan, kabupaten, pengusul, periode, status 
-       FROM zkup ${whereClauseZkup}`,
-      values
+    const [pendataan, zkup] = await Promise.all([
+      query(
+        `
+        SELECT 'Pendataan' AS sumber, id, nama, nik, telepon, desa, kecamatan, kabupaten,
+               pengusul, tahun_realisasi AS periode, status
+        FROM pendataan
+        ${wherePendataan}
+        ORDER BY tahun_realisasi DESC
+        `,
+        valuesPendataan
+      ),
+      query(
+        `
+        SELECT 'ZKUP' AS sumber, id, nama, nik, telepon, desa, kecamatan, kabupaten,
+               pengusul, periode, status
+        FROM zkup
+        ${whereZkup}
+        ORDER BY periode DESC
+        `,
+        valuesZkup
+      ),
+    ]);
+
+    const combinedData = [...pendataan, ...zkup].sort((a, b) =>
+      (b.periode || "").localeCompare(a.periode || "")
     );
 
     res.json({
-      data: [...pendataan, ...zkup],
-      total: pendataan.length + zkup.length,
+      data: combinedData,
+      total: combinedData.length,
       isSuccess: true,
     });
   } catch (err) {
+    console.error("Error /laporan/combined:", err);
     res.status(500).json({ message: err.message, isSuccess: false });
   }
 });
 
-export default router;
+module.exports = router;

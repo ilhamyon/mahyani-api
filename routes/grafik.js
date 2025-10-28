@@ -1,9 +1,9 @@
-import express from "express";
-import db from "../db.js";
-import { authenticate } from "./auth.js";
-
+const db = require("../db.js");
+const { authenticate } = require("./auth.js");
+const express = require("express");
 const router = express.Router();
 
+// Helper query dengan Promise
 const query = (sql, values = []) =>
   new Promise((resolve, reject) => {
     db.query(sql, values, (err, results) => {
@@ -14,14 +14,14 @@ const query = (sql, values = []) =>
 
 /**
  * 📊 GET /api/grafik/summary
- * Ringkasan jumlah data dari pendataan dan zkup
+ * Ringkasan total data dari pendataan dan zkup
  */
 router.get("/summary", authenticate, async (req, res) => {
   try {
     let whereClause = "";
     const values = [];
 
-    // Filter untuk user non-admin
+    // Filter jika user bukan admin
     if (req.user.role !== "admin") {
       whereClause = "WHERE pengusul = ?";
       values.push(req.user.pengusul);
@@ -38,20 +38,21 @@ router.get("/summary", authenticate, async (req, res) => {
 
     res.json({
       data: {
-        pendataan: pendataan.total,
-        zkup: zkup.total,
-        total: pendataan.total + zkup.total,
+        pendataan: pendataan.total || 0,
+        zkup: zkup.total || 0,
+        total: (pendataan.total || 0) + (zkup.total || 0),
       },
       isSuccess: true,
     });
   } catch (err) {
+    console.error("Error in /summary:", err);
     res.status(500).json({ message: err.message, isSuccess: false });
   }
 });
 
 /**
  * 📈 GET /api/grafik/perKabupaten
- * Agregasi jumlah data per kabupaten
+ * Agregasi jumlah data per kabupaten dari pendataan & zkup
  */
 router.get("/perKabupaten", authenticate, async (req, res) => {
   try {
@@ -73,18 +74,30 @@ router.get("/perKabupaten", authenticate, async (req, res) => {
       values
     );
 
+    // Gabungkan berdasarkan kabupaten
+    const combined = {};
+    for (const row of pendataan) {
+      combined[row.kabupaten] = { kabupaten: row.kabupaten, pendataan: row.jumlah, zkup: 0 };
+    }
+    for (const row of zkup) {
+      if (!combined[row.kabupaten])
+        combined[row.kabupaten] = { kabupaten: row.kabupaten, pendataan: 0, zkup: row.jumlah };
+      else combined[row.kabupaten].zkup = row.jumlah;
+    }
+
     res.json({
-      data: { pendataan, zkup },
+      data: Object.values(combined),
       isSuccess: true,
     });
   } catch (err) {
+    console.error("Error in /perKabupaten:", err);
     res.status(500).json({ message: err.message, isSuccess: false });
   }
 });
 
 /**
  * 🗓️ GET /api/grafik/perTahun
- * Data berdasarkan tahun realisasi
+ * Agregasi berdasarkan tahun realisasi (pendataan) & periode (zkup)
  */
 router.get("/perTahun", authenticate, async (req, res) => {
   try {
@@ -98,21 +111,37 @@ router.get("/perTahun", authenticate, async (req, res) => {
 
     const pendataan = await query(
       `SELECT tahun_realisasi AS tahun, COUNT(*) AS jumlah 
-       FROM pendataan ${whereClause} GROUP BY tahun_realisasi ORDER BY tahun_realisasi`,
+       FROM pendataan ${whereClause} 
+       GROUP BY tahun_realisasi 
+       ORDER BY tahun_realisasi`,
       values
     );
 
     const zkup = await query(
       `SELECT periode AS tahun, COUNT(*) AS jumlah 
-       FROM zkup ${whereClause} GROUP BY periode ORDER BY periode`,
+       FROM zkup ${whereClause} 
+       GROUP BY periode 
+       ORDER BY periode`,
       values
     );
 
+    // Gabungkan hasil berdasarkan tahun
+    const combined = {};
+    for (const row of pendataan) {
+      combined[row.tahun] = { tahun: row.tahun, pendataan: row.jumlah, zkup: 0 };
+    }
+    for (const row of zkup) {
+      if (!combined[row.tahun])
+        combined[row.tahun] = { tahun: row.tahun, pendataan: 0, zkup: row.jumlah };
+      else combined[row.tahun].zkup = row.jumlah;
+    }
+
     res.json({
-      data: { pendataan, zkup },
+      data: Object.values(combined),
       isSuccess: true,
     });
   } catch (err) {
+    console.error("Error in /perTahun:", err);
     res.status(500).json({ message: err.message, isSuccess: false });
   }
 });
@@ -140,13 +169,25 @@ router.get("/perStatus", authenticate, async (req, res) => {
       values
     );
 
+    // Gabungkan status agar bisa tampil di chart
+    const allStatus = {};
+    for (const row of pendataan) {
+      allStatus[row.status] = { status: row.status, pendataan: row.jumlah, zkup: 0 };
+    }
+    for (const row of zkup) {
+      if (!allStatus[row.status])
+        allStatus[row.status] = { status: row.status, pendataan: 0, zkup: row.jumlah };
+      else allStatus[row.status].zkup = row.jumlah;
+    }
+
     res.json({
-      data: { pendataan, zkup },
+      data: Object.values(allStatus),
       isSuccess: true,
     });
   } catch (err) {
+    console.error("Error in /perStatus:", err);
     res.status(500).json({ message: err.message, isSuccess: false });
   }
 });
 
-export default router;
+module.exports = router;

@@ -1,10 +1,9 @@
-import express from "express";
-import db from "../db.js";
-import { authenticate } from "./auth.js";
-
+const db = require("../db.js");
+const { authenticate } = require("./auth.js");
+const express = require("express");
 const router = express.Router();
 
-// Helper query
+// Helper query (promise wrapper)
 const query = (sql, values = []) =>
   new Promise((resolve, reject) => {
     db.query(sql, values, (err, results) => {
@@ -24,7 +23,6 @@ router.get("/pendataan", authenticate, async (req, res) => {
       FROM pendataan
     `;
 
-    // Kalau user bukan admin, filter berdasarkan pengusul
     const values = [];
     if (req.user.role !== "admin") {
       sql += " WHERE pengusul = ?";
@@ -34,6 +32,7 @@ router.get("/pendataan", authenticate, async (req, res) => {
     const results = await query(sql, values);
     res.status(200).json({ data: results, isSuccess: true });
   } catch (err) {
+    console.error("Error fetching pendataan:", err);
     res.status(500).json({ message: err.message, isSuccess: false });
   }
 });
@@ -49,7 +48,6 @@ router.get("/zkup", authenticate, async (req, res) => {
       FROM zkup
     `;
 
-    // Filter untuk user (bukan admin)
     const values = [];
     if (req.user.role !== "admin") {
       sql += " WHERE pengusul = ?";
@@ -59,8 +57,9 @@ router.get("/zkup", authenticate, async (req, res) => {
     const results = await query(sql, values);
     res.status(200).json({ data: results, isSuccess: true });
   } catch (err) {
+    console.error("Error fetching zkup:", err);
     res.status(500).json({ message: err.message, isSuccess: false });
   }
 });
 
-export default router;
+module.exports = router;
