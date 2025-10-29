@@ -17,6 +17,7 @@ const dataMustahikRoutes = require("./routes/dataMustahik");
 const grafikRoutes = require("./routes/grafik");
 const laporanRoutes = require("./routes/laporan");
 const { router: authRouter, authenticate } = require("./routes/auth");
+const verifikasiRoutes = require("./routes/verifikasi.js");
 
 // === ROUTES ===
 
@@ -30,6 +31,8 @@ app.use("/api/users", authenticate, userRoutes);
 app.use("/api/data-mustahik", authenticate, dataMustahikRoutes);
 app.use("/api/grafik", authenticate, grafikRoutes);
 app.use("/api/laporan", authenticate, laporanRoutes);
+app.use("/api/verifikasi", verifikasiRoutes);
+
 
 // === SERVER START ===
 const PORT = process.env.PORT || 3000;
