@@ -31,7 +31,7 @@ app.use("/api/users", authenticate, userRoutes);
 app.use("/api/data-mustahik", authenticate, dataMustahikRoutes);
 app.use("/api/grafik", authenticate, grafikRoutes);
 app.use("/api/laporan", authenticate, laporanRoutes);
-app.use("/api/verifikasi", verifikasiRoutes);
+app.use("/api/verifikasi", authenticate, verifikasiRoutes);
 
 
 // === SERVER START ===
