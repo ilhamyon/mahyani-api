@@ -21,25 +21,27 @@ router.get("/menunggu", authenticate, async (req, res) => {
     let whereClause = "WHERE status = 'Menunggu'";
     const values = [];
 
-    // Jika user bukan admin → hanya data miliknya
     if (req.user.role !== "admin") {
       whereClause += " AND pengusul = ?";
       values.push(req.user.pengusul);
     }
 
     const pendataan = await query(
-      `SELECT id, nama, nik, kabupaten, pengusul, status, tahun_realisasi, created_at AS tahun, 'pendataan' AS sumber
+      `SELECT id, nama, nik, kabupaten, pengusul, status, tahun_realisasi, created_at AS tanggal, 'pendataan' AS sumber
        FROM pendataan ${whereClause}`,
       values
     );
 
     const zkup = await query(
-      `SELECT id, nama, nik, kabupaten, pengusul, status, periode, created_at AS tahun, 'zkup' AS sumber
+      `SELECT id, nama, nik, kabupaten, pengusul, status, periode, created_at AS tanggal, 'zkup' AS sumber
        FROM zkup ${whereClause}`,
       values
     );
 
-    const data = [...pendataan, ...zkup];
+    // Gabung dan urutkan berdasarkan tanggal terbaru
+    const data = [...pendataan, ...zkup].sort(
+      (a, b) => new Date(b.tanggal) - new Date(a.tanggal)
+    );
 
     res.json({
       total: data.length,
@@ -55,33 +57,41 @@ router.get("/menunggu", authenticate, async (req, res) => {
 /**
  * 🟢 PATCH /api/verifikasi/update-status
  * Mengubah status verifikasi data (pendataan / zkup)
- * Body: { sumber: "pendataan"|"zkup", id: number, status: "Disetujui"|"Ditolak" }
+ * Body: { sumber: "pendataan"|"zkup", id: number, status: "Disetujui"|"Ditolak"|"Menunggu" }
  */
 router.patch("/update-status", authenticate, async (req, res) => {
   try {
-    const { sumber, id, status } = req.body;
+    const { sumber, ids, status } = req.body;
 
-    // Validasi input
+    // Validasi sumber
     if (!["pendataan", "zkup"].includes(sumber)) {
       return res.status(400).json({ message: "Sumber tidak valid", isSuccess: false });
     }
 
+    // Validasi status
     if (!["Disetujui", "Ditolak", "Menunggu"].includes(status)) {
       return res.status(400).json({ message: "Status tidak valid", isSuccess: false });
     }
 
-    const result = await query(
-      `UPDATE ${sumber} SET status = ? WHERE id = ?`,
-      [status, id]
-    );
+    // Validasi IDs
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ message: "Daftar ID tidak boleh kosong", isSuccess: false });
+    }
+
+    // Buat placeholder (?, ?, ?, ...) sesuai jumlah id
+    const placeholders = ids.map(() => "?").join(",");
+
+    // Jalankan query update massal
+    const sql = `UPDATE ${sumber} SET status = ? WHERE id IN (${placeholders})`;
+    const result = await query(sql, [status, ...ids]);
 
     if (result.affectedRows === 0) {
-      return res.status(404).json({ message: "Data tidak ditemukan", isSuccess: false });
+      return res.status(404).json({ message: "Tidak ada data yang diubah", isSuccess: false });
     }
 
     res.json({
-      message: "Status verifikasi berhasil diperbarui",
-      updated: { sumber, id, status },
+      message: `Berhasil memperbarui status ${result.affectedRows} data menjadi '${status}'`,
+      updatedCount: result.affectedRows,
       isSuccess: true,
     });
   } catch (err) {

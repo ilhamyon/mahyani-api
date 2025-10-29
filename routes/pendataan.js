@@ -30,6 +30,8 @@ router.get("/", async (req, res) => {
       values.push(req.user.pengusul);
     }
 
+    sql += " ORDER BY created_at DESC";
+
     const results = await query(sql, values);
     res.status(200).json({ data: results, isSuccess: true });
   } catch (err) {
@@ -69,7 +71,7 @@ router.post("/", async (req, res) => {
       id: newId,
       ...data,
       pengusul: req.user.pengusul,
-      status: "Menunggu Verifikasi",
+      status: "Menunggu",
     };
 
     await query("INSERT INTO pendataan SET ?", payload);
