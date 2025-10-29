@@ -190,4 +190,50 @@ router.get("/perStatus", authenticate, async (req, res) => {
   }
 });
 
+/**
+ * 👥 GET /api/grafik/perPengusul
+ * Jumlah data per pengusul dari pendataan dan zkup
+ */
+router.get("/perPengusul", authenticate, async (req, res) => {
+  try {
+    let whereClause = "";
+    const values = [];
+
+    // Jika user bukan admin, hanya tampilkan data miliknya
+    if (req.user.role !== "admin") {
+      whereClause = "WHERE pengusul = ?";
+      values.push(req.user.pengusul);
+    }
+
+    const pendataan = await query(
+      `SELECT pengusul, COUNT(*) AS jumlah FROM pendataan ${whereClause} GROUP BY pengusul`,
+      values
+    );
+
+    const zkup = await query(
+      `SELECT pengusul, COUNT(*) AS jumlah FROM zkup ${whereClause} GROUP BY pengusul`,
+      values
+    );
+
+    // Gabungkan berdasarkan pengusul
+    const combined = {};
+    for (const row of pendataan) {
+      combined[row.pengusul] = { pengusul: row.pengusul, pendataan: row.jumlah, zkup: 0 };
+    }
+    for (const row of zkup) {
+      if (!combined[row.pengusul])
+        combined[row.pengusul] = { pengusul: row.pengusul, pendataan: 0, zkup: row.jumlah };
+      else combined[row.pengusul].zkup = row.jumlah;
+    }
+
+    res.json({
+      data: Object.values(combined),
+      isSuccess: true,
+    });
+  } catch (err) {
+    console.error("Error in /perPengusul:", err);
+    res.status(500).json({ message: err.message, isSuccess: false });
+  }
+});
+
 module.exports = router;

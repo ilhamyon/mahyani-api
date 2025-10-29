@@ -21,6 +21,7 @@ const generateId = async () => {
 // ✅ GET semua data (dengan filter role)
 router.get("/", async (req, res) => {
   try {
+    res.set("Cache-Control", "no-store");
     let sql = "SELECT * FROM zkup";
     let values = [];
 
