@@ -37,6 +37,25 @@ router.get("/", async (req, res) => {
   }
 });
 
+// ✅ GET by ID
+router.get("/:id", async (req, res) => {
+  try {
+    const result = await query("SELECT * FROM pendataan WHERE id = ?", [req.params.id]);
+    if (result.length === 0) {
+      return res.status(404).json({ data: null, errorMessage: "Data tidak ditemukan", isSuccess: false });
+    }
+
+    // Jika user bukan admin, pastikan data miliknya sendiri
+    if (req.user.role !== "admin" && result[0].pengusul !== req.user.pengusul) {
+      return res.status(403).json({ data: null, errorMessage: "Akses ditolak", isSuccess: false });
+    }
+
+    res.status(200).json({ data: result[0], errorMessage: null, isSuccess: true });
+  } catch (err) {
+    res.status(500).json({ data: null, errorMessage: err.message, isSuccess: false });
+  }
+});
+
 // ✅ POST tambah data
 router.post("/", async (req, res) => {
   try {

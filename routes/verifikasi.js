@@ -28,13 +28,13 @@ router.get("/menunggu", authenticate, async (req, res) => {
     }
 
     const pendataan = await query(
-      `SELECT id, nama, nik, kabupaten, pengusul, status, tahun_realisasi AS tahun, 'pendataan' AS sumber
+      `SELECT id, nama, nik, kabupaten, pengusul, status, tahun_realisasi, created_at AS tahun, 'pendataan' AS sumber
        FROM pendataan ${whereClause}`,
       values
     );
 
     const zkup = await query(
-      `SELECT id, nama, nik, kabupaten, pengusul, status, periode AS tahun, 'zkup' AS sumber
+      `SELECT id, nama, nik, kabupaten, pengusul, status, periode, created_at AS tahun, 'zkup' AS sumber
        FROM zkup ${whereClause}`,
       values
     );
