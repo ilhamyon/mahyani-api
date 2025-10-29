@@ -61,37 +61,40 @@ router.get("/menunggu", authenticate, async (req, res) => {
  */
 router.patch("/update-status", authenticate, async (req, res) => {
   try {
-    const { sumber, ids, status } = req.body;
+    const { data } = req.body;
 
-    // Validasi sumber
-    if (!["pendataan", "zkup"].includes(sumber)) {
-      return res.status(400).json({ message: "Sumber tidak valid", isSuccess: false });
+    if (!Array.isArray(data) || data.length === 0) {
+      return res.status(400).json({ message: "Data tidak boleh kosong", isSuccess: false });
     }
 
-    // Validasi status
-    if (!["Disetujui", "Ditolak", "Menunggu"].includes(status)) {
-      return res.status(400).json({ message: "Status tidak valid", isSuccess: false });
+    let totalUpdated = 0;
+
+    for (const item of data) {
+      const { sumber, ids, status } = item;
+
+      // Validasi sumber
+      if (!["pendataan", "zkup"].includes(sumber)) continue;
+
+      // Validasi status
+      if (!["Disetujui", "Ditolak", "Menunggu"].includes(status)) continue;
+
+      // Validasi IDs
+      if (!Array.isArray(ids) || ids.length === 0) continue;
+
+      const placeholders = ids.map(() => "?").join(",");
+      const sql = `UPDATE ${sumber} SET status = ? WHERE id IN (${placeholders})`;
+      const result = await query(sql, [status, ...ids]);
+
+      totalUpdated += result.affectedRows;
     }
 
-    // Validasi IDs
-    if (!Array.isArray(ids) || ids.length === 0) {
-      return res.status(400).json({ message: "Daftar ID tidak boleh kosong", isSuccess: false });
-    }
-
-    // Buat placeholder (?, ?, ?, ...) sesuai jumlah id
-    const placeholders = ids.map(() => "?").join(",");
-
-    // Jalankan query update massal
-    const sql = `UPDATE ${sumber} SET status = ? WHERE id IN (${placeholders})`;
-    const result = await query(sql, [status, ...ids]);
-
-    if (result.affectedRows === 0) {
+    if (totalUpdated === 0) {
       return res.status(404).json({ message: "Tidak ada data yang diubah", isSuccess: false });
     }
 
     res.json({
-      message: `Berhasil memperbarui status ${result.affectedRows} data menjadi '${status}'`,
-      updatedCount: result.affectedRows,
+      message: `Berhasil memperbarui status ${totalUpdated} data`,
+      updatedCount: totalUpdated,
       isSuccess: true,
     });
   } catch (err) {
